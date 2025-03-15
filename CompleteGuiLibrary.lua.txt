@@ -1,0 +1,700 @@
+--[[
+    Custom GUI Library for Roblox
+    Created by: StupidGabee
+    Creation Date: 2025-03-15 22:23:32 UTC
+    
+    Features:
+    - Horizontal GUI Hub
+    - Toggle with 'C' key
+    - Mobile support with draggable button
+    - Background image support
+    - Button image support
+    - Tab system (Main, PVP, Farm, ESP, Teleport)
+    - Toggles, Buttons, and Sliders
+]]
+
+-- Services
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+-- Variables
+local Player = Players.LocalPlayer
+local Mouse = Player:GetMouse()
+
+-- Library Creation
+local Library = {
+    Tabs = {},
+    CurrentTab = nil,
+    Visible = true,
+    IsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled,
+    Colors = {
+        Primary = Color3.fromRGB(30, 30, 30),
+        Secondary = Color3.fromRGB(45, 45, 45),
+        Accent = Color3.fromRGB(255, 75, 75),
+        Text = Color3.fromRGB(255, 255, 255),
+        TextDark = Color3.fromRGB(175, 175, 175)
+    }
+}
+
+-- Utility Functions
+local function CreateInstance(className, properties)
+    local instance = Instance.new(className)
+    for property, value in pairs(properties) do
+        instance[property] = value
+    end
+    return instance
+end
+
+local function AddCorners(instance, radius)
+    local corner = CreateInstance("UICorner", {
+        CornerRadius = UDim.new(radius or 0, 6)
+    })
+    corner.Parent = instance
+    return corner
+end
+
+-- Core GUI Functions
+function Library:Init(title, backgroundImageId)
+    -- Create ScreenGui
+    self.ScreenGui = CreateInstance("ScreenGui", {
+        Name = "CustomGUILibrary",
+        ResetOnSpawn = false,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    })
+    
+    -- Try to parent to CoreGui
+    pcall(function()
+        self.ScreenGui.Parent = CoreGui
+    end)
+    
+    if not self.ScreenGui.Parent then
+        self.ScreenGui.Parent = Player:WaitForChild("PlayerGui")
+    end
+    
+    -- Create Main Frame
+    self.MainFrame = CreateInstance("Frame", {
+        Name = "MainFrame",
+        Size = UDim2.new(0, 600, 0, 400),
+        Position = UDim2.new(0.5, -300, 0.5, -200),
+        BackgroundColor3 = self.Colors.Primary,
+        BorderSizePixel = 0,
+        Parent = self.ScreenGui
+    })
+    
+    -- Add Background Image if provided
+    if backgroundImageId then
+        self.BackgroundImage = CreateInstance("ImageLabel", {
+            Name = "BackgroundImage",
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://" .. backgroundImageId,
+            ScaleType = Enum.ScaleType.Stretch,
+            Parent = self.MainFrame
+        })
+    end
+    
+    -- Create Title Bar
+    self.TitleBar = CreateInstance("Frame", {
+        Name = "TitleBar",
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundColor3 = self.Colors.Accent,
+        BorderSizePixel = 0,
+        Parent = self.MainFrame
+    })
+    
+    -- Add Title Text
+    self.TitleText = CreateInstance("TextLabel", {
+        Name = "TitleText",
+        Size = UDim2.new(1, -30, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = title or "GUI Hub",
+        TextColor3 = self.Colors.Text,
+        TextSize = 18,
+        Font = Enum.Font.SourceSansBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = self.TitleBar
+    })
+    
+    -- Add Close Button
+    self.CloseButton = CreateInstance("TextButton", {
+        Name = "CloseButton",
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(1, -30, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "X",
+        TextColor3 = self.Colors.Text,
+        TextSize = 18,
+        Font = Enum.Font.SourceSansBold,
+        Parent = self.TitleBar
+    })
+    
+    -- Create Tab Container
+    self.TabContainer = CreateInstance("Frame", {
+        Name = "TabContainer",
+        Size = UDim2.new(1, 0, 0, 40),
+        Position = UDim2.new(0, 0, 0, 30),
+        BackgroundColor3 = self.Colors.Secondary,
+        BorderSizePixel = 0,
+        Parent = self.MainFrame
+    })
+    
+    -- Create Tab Scroll
+    self.TabScroll = CreateInstance("ScrollingFrame", {
+        Name = "TabScroll",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarImageColor3 = self.Colors.Accent,
+        ScrollBarThickness = 4,
+        ScrollingDirection = Enum.ScrollingDirection.X,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        Parent = self.TabContainer
+    })
+    
+    -- Create Content Container
+    self.ContentContainer = CreateInstance("Frame", {
+        Name = "ContentContainer",
+        Size = UDim2.new(1, 0, 1, -70),
+        Position = UDim2.new(0, 0, 0, 70),
+        BackgroundTransparency = 1,
+        Parent = self.MainFrame
+    })
+    
+    -- Make GUI draggable
+    self:MakeDraggable(self.MainFrame, self.TitleBar)
+    
+    -- Setup Close Button
+    self.CloseButton.MouseButton1Click:Connect(function()
+        self:Toggle()
+    end)
+    
+    -- Setup Keyboard Toggle
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == Enum.KeyCode.C then
+            self:Toggle()
+        end
+    end)
+    
+    -- Create Mobile Toggle if needed
+    if self.IsMobile then
+        self:CreateMobileToggle()
+    end
+    
+    -- Create Default Tabs
+    self:AddTab("Main")
+    self:AddTab("PVP")
+    self:AddTab("Farm")
+    self:AddTab("ESP")
+    self:AddTab("Teleport")
+    
+    -- Select first tab
+    self:SelectTab("Main")
+    
+    return self
+end
+
+-- Make element draggable
+function Library:MakeDraggable(element, dragElement)
+    dragElement = dragElement or element
+    
+    local dragging = false
+    local dragInput, dragStart, startPos
+    
+    local function updateInput(input)
+        local delta = input.Position - dragStart
+        element.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    
+    dragElement.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = element.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    dragElement.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            updateInput(input)
+        end
+    end)
+end
+
+-- Create Mobile Toggle Button
+function Library:CreateMobileToggle()
+    self.MobileToggle = CreateInstance("ImageButton", {
+        Name = "MobileToggle",
+        Size = UDim2.new(0, 50, 0, 50),
+        Position = UDim2.new(0, 20, 0.5, -25),
+        BackgroundColor3 = self.Colors.Accent,
+        BorderSizePixel = 0,
+        Image = "",
+        Parent = self.ScreenGui
+    })
+    
+    -- Add label to mobile toggle
+    CreateInstance("TextLabel", {
+        Name = "ToggleText",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = "GUI",
+        TextColor3 = self.Colors.Text,
+        TextSize = 18,
+        Font = Enum.Font.SourceSansBold,
+        Parent = self.MobileToggle
+    })
+    
+    -- Make mobile toggle draggable
+    self:MakeDraggable(self.MobileToggle)
+    
+    -- Add toggle functionality
+    self.MobileToggle.MouseButton1Click:Connect(function()
+        self:Toggle()
+    end)
+    
+    -- Persist mobile toggle
+    Player.CharacterAdded:Connect(function()
+        if self.MobileToggle then
+            self.MobileToggle.Parent = self.ScreenGui
+        end
+    end)
+    
+    AddCorners(self.MobileToggle, 1)
+end
+
+-- Toggle GUI visibility
+function Library:Toggle()
+    self.Visible = not self.Visible
+    self.MainFrame.Visible = self.Visible
+end
+
+-- Add new tab
+function Library:AddTab(name, imageId)
+    if self.Tabs[name] then return self.Tabs[name] end
+    
+    local buttonWidth = 120
+    local tabCount = #self.TabScroll:GetChildren()
+    
+    -- Create tab button
+    local tabButton = CreateInstance("TextButton", {
+        Name = name .. "Button",
+        Size = UDim2.new(0, buttonWidth, 1, 0),
+        Position = UDim2.new(0, (tabCount) * buttonWidth, 0, 0),
+        BackgroundColor3 = self.Colors.Secondary,
+        BorderSizePixel = 0,
+        Text = name,
+        TextColor3 = self.Colors.TextDark,
+        TextSize = 16,
+        Font = Enum.Font.SourceSansBold,
+        Parent = self.TabScroll
+    })
+    
+    -- Add image if provided
+    if imageId then
+        tabButton.Text = ""
+        
+        CreateInstance("ImageLabel", {
+            Name = "ButtonImage",
+            Size = UDim2.new(0, 24, 0, 24),
+            Position = UDim2.new(0.5, -12, 0.5, -12),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://" .. imageId,
+            Parent = tabButton
+        })
+        
+        CreateInstance("TextLabel", {
+            Name = "ButtonText",
+            Size = UDim2.new(1, 0, 0, 15),
+            Position = UDim2.new(0, 0, 1, -15),
+            BackgroundTransparency = 1,
+            Text = name,
+            TextColor3 = self.Colors.TextDark,
+            TextSize = 12,
+            Font = Enum.Font.SourceSansBold,
+            Parent = tabButton
+        })
+    end
+    
+    -- Create content frame
+    local contentFrame = CreateInstance("ScrollingFrame", {
+        Name = name .. "Content",
+        Size = UDim2.new(1, -20, 1, -20),
+        Position = UDim2.new(0, 10, 0, 10),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 4,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        Visible = false,
+        Parent = self.ContentContainer
+    })
+    
+    -- Add list layout
+    local listLayout = CreateInstance("UIListLayout", {
+        Name = "ListLayout",
+        Padding = UDim.new(0, 10),
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Parent = contentFrame
+    })
+    
+    -- Update canvas size
+    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        contentFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 20)
+    end)
+    
+    -- Store tab
+    self.Tabs[name] = {
+        Button = tabButton,
+        Content = contentFrame,
+        Elements = {}
+    }
+    
+    -- Update tab scroll canvas size
+    self.TabScroll.CanvasSize = UDim2.new(0, (tabCount + 1) * buttonWidth, 0, 0)
+    
+    -- Add tab button click handler
+    tabButton.MouseButton1Click:Connect(function()
+        self:SelectTab(name)
+    end)
+    
+    return self.Tabs[name]
+end
+
+-- Select tab
+function Library:SelectTab(name)
+    if not self.Tabs[name] then return end
+    
+    -- Deselect current tab
+    if self.CurrentTab then
+        self.CurrentTab.Button.BackgroundColor3 = self.Colors.Secondary
+        self.CurrentTab.Button.TextColor3 = self.Colors.TextDark
+        self.CurrentTab.Content.Visible = false
+        
+        local buttonText = self.CurrentTab.Button:FindFirstChild("ButtonText")
+        if buttonText then
+            buttonText.TextColor3 = self.Colors.TextDark
+        end
+    end
+    
+    -- Select new tab
+    self.CurrentTab = self.Tabs[name]
+    self.CurrentTab.Button.BackgroundColor3 = self.Colors.Accent
+    self.CurrentTab.Button.TextColor3 = self.Colors.Text
+    self.CurrentTab.Content.Visible = true
+    
+    local buttonText = self.CurrentTab.Button:FindFirstChild("ButtonText")
+    if buttonText then
+        buttonText.TextColor3 = self.Colors.Text
+    end
+end
+
+-- Add button
+function Library:AddButton(tab, text, callback, imageId)
+    if not self.Tabs[tab] then return end
+    
+    local button = CreateInstance("TextButton", {
+        Name = text .. "Button",
+        Size = UDim2.new(0.9, 0, 0, 40),
+        BackgroundColor3 = self.Colors.Secondary,
+        BorderSizePixel = 0,
+        Text = text,
+        TextColor3 = self.Colors.Text,
+        TextSize = 16,
+        Font = Enum.Font.SourceSansBold,
+               Parent = self.Tabs[tab].Content
+    })
+    
+    -- Add corners
+    AddCorners(button)
+    
+    -- Add image if provided
+    if imageId then
+        button.Text = ""
+        
+        CreateInstance("ImageLabel", {
+            Name = "ButtonImage",
+            Size = UDim2.new(0, 24, 0, 24),
+            Position = UDim2.new(0, 10, 0.5, -12),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://" .. imageId,
+            Parent = button
+        })
+        
+        CreateInstance("TextLabel", {
+            Name = "ButtonText",
+            Size = UDim2.new(1, -50, 1, 0),
+            Position = UDim2.new(0, 40, 0, 0),
+            BackgroundTransparency = 1,
+            Text = text,
+            TextColor3 = self.Colors.Text,
+            TextSize = 16,
+            Font = Enum.Font.SourceSansBold,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = button
+        })
+    end
+    
+    -- Add hover effects
+    button.MouseEnter:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.2), {
+            BackgroundColor3 = self.Colors.Accent
+        }):Play()
+    end)
+    
+    button.MouseLeave:Connect(function()
+        TweenService:Create(button, TweenInfo.new(0.2), {
+            BackgroundColor3 = self.Colors.Secondary
+        }):Play()
+    end)
+    
+    -- Add click handler
+    button.MouseButton1Click:Connect(function()
+        if callback then
+            callback()
+        end
+    end)
+    
+    return button
+end
+
+-- Add toggle
+function Library:AddToggle(tab, text, default, callback)
+    if not self.Tabs[tab] then return end
+    
+    local toggle = CreateInstance("Frame", {
+        Name = text .. "Toggle",
+        Size = UDim2.new(0.9, 0, 0, 40),
+        BackgroundColor3 = self.Colors.Secondary,
+        BorderSizePixel = 0,
+        Parent = self.Tabs[tab].Content
+    })
+    
+    -- Add corners
+    AddCorners(toggle)
+    
+    -- Add label
+    local label = CreateInstance("TextLabel", {
+        Name = "Label",
+        Size = UDim2.new(1, -60, 1, 0),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = text,
+        TextColor3 = self.Colors.Text,
+        TextSize = 16,
+        Font = Enum.Font.SourceSansBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = toggle
+    })
+    
+    -- Create switch
+    local switch = CreateInstance("Frame", {
+        Name = "Switch",
+        Size = UDim2.new(0, 40, 0, 20),
+        Position = UDim2.new(1, -50, 0.5, -10),
+        BackgroundColor3 = self.Colors.TextDark,
+        BorderSizePixel = 0,
+        Parent = toggle
+    })
+    
+    -- Create indicator
+    local indicator = CreateInstance("Frame", {
+        Name = "Indicator",
+        Size = UDim2.new(0, 16, 0, 16),
+        Position = UDim2.new(0, 2, 0.5, -8),
+        BackgroundColor3 = self.Colors.Text,
+        BorderSizePixel = 0,
+        Parent = switch
+    })
+    
+    -- Add corners to switch and indicator
+    AddCorners(switch, 1)
+    AddCorners(indicator, 1)
+    
+    -- Toggle state
+    local enabled = default or false
+    local function updateState()
+        if enabled then
+            TweenService:Create(switch, TweenInfo.new(0.2), {
+                BackgroundColor3 = self.Colors.Accent
+            }):Play()
+            TweenService:Create(indicator, TweenInfo.new(0.2), {
+                Position = UDim2.new(1, -18, 0.5, -8)
+            }):Play()
+        else
+            TweenService:Create(switch, TweenInfo.new(0.2), {
+                BackgroundColor3 = self.Colors.TextDark
+            }):Play()
+            TweenService:Create(indicator, TweenInfo.new(0.2), {
+                Position = UDim2.new(0, 2, 0.5, -8)
+            }):Play()
+        end
+        
+        if callback then
+            callback(enabled)
+        end
+    end
+    
+    -- Set initial state
+    updateState()
+    
+    -- Add click handler
+    toggle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            enabled = not enabled
+            updateState()
+        end
+    end)
+    
+    -- Add hover effects
+    toggle.MouseEnter:Connect(function()
+        TweenService:Create(toggle, TweenInfo.new(0.2), {
+            BackgroundColor3 = self.Colors.Accent
+        }):Play()
+    end)
+    
+    toggle.MouseLeave:Connect(function()
+        TweenService:Create(toggle, TweenInfo.new(0.2), {
+            BackgroundColor3 = self.Colors.Secondary
+        }):Play()
+    end)
+    
+    return toggle
+end
+
+-- Add slider
+function Library:AddSlider(tab, text, min, max, default, callback)
+    if not self.Tabs[tab] then return end
+    
+    local slider = CreateInstance("Frame", {
+        Name = text .. "Slider",
+        Size = UDim2.new(0.9, 0, 0, 60),
+        BackgroundColor3 = self.Colors.Secondary,
+        BorderSizePixel = 0,
+        Parent = self.Tabs[tab].Content
+    })
+    
+    -- Add corners
+    AddCorners(slider)
+    
+    -- Add label
+    local label = CreateInstance("TextLabel", {
+        Name = "Label",
+        Size = UDim2.new(1, -20, 0, 30),
+        Position = UDim2.new(0, 10, 0, 0),
+        BackgroundTransparency = 1,
+        Text = text,
+        TextColor3 = self.Colors.Text,
+        TextSize = 16,
+        Font = Enum.Font.SourceSansBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = slider
+    })
+    
+    -- Add value label
+    local valueLabel = CreateInstance("TextLabel", {
+        Name = "Value",
+        Size = UDim2.new(0, 50, 0, 30),
+        Position = UDim2.new(1, -60, 0, 0),
+        BackgroundTransparency = 1,
+        Text = tostring(default or min),
+        TextColor3 = self.Colors.Text,
+        TextSize = 16,
+        Font = Enum.Font.SourceSansBold,
+        Parent = slider
+    })
+    
+    -- Create slider bar
+    local sliderBar = CreateInstance("Frame", {
+        Name = "SliderBar",
+        Size = UDim2.new(1, -20, 0, 4),
+        Position = UDim2.new(0, 10, 0, 45),
+        BackgroundColor3 = self.Colors.TextDark,
+        BorderSizePixel = 0,
+        Parent = slider
+    })
+    
+    -- Create slider fill
+    local sliderFill = CreateInstance("Frame", {
+        Name = "SliderFill",
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = self.Colors.Accent,
+        BorderSizePixel = 0,
+        Parent = sliderBar
+    })
+    
+    -- Add corners to slider bar and fill
+    AddCorners(sliderBar, 1)
+    AddCorners(sliderFill, 1)
+    
+    -- Slider functionality
+    local dragging = false
+    local value = default or min
+    
+    local function updateSlider(input)
+        local pos = math.clamp((input.Position.X - sliderBar.AbsolutePosition.X) / sliderBar.AbsoluteSize.X, 0, 1)
+        value = math.floor(min + ((max - min) * pos))
+        valueLabel.Text = tostring(value)
+        sliderFill.Size = UDim2.new(pos, 0, 1, 0)
+        
+        if callback then
+            callback(value)
+        end
+    end
+    
+    sliderBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            updateSlider(input)
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateSlider(input)
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    -- Set default value
+    local defaultPos = (default - min) / (max - min)
+    sliderFill.Size = UDim2.new(defaultPos, 0, 1, 0)
+    
+    -- Add hover effects
+    slider.MouseEnter:Connect(function()
+        TweenService:Create(slider, TweenInfo.new(0.2), {
+            BackgroundColor3 = self.Colors.Accent
+        }):Play()
+    end)
+    
+    slider.MouseLeave:Connect(function()
+        TweenService:Create(slider, TweenInfo.new(0.2), {
+            BackgroundColor3 = self.Colors.Secondary
+        }):Play()
+    end)
+    
+    return slider
+end
+
+return Library
